@@ -17,6 +17,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -586,25 +587,32 @@ func (cache *snapshotCache) respondDelta(ctx context.Context, snapshot ResourceS
 		versionMap:    snapshot.GetVersionMap(request.GetTypeUrl()),
 		systemVersion: snapshot.GetVersion(request.GetTypeUrl()),
 	})
+
 	if cache.log != nil {
-		cache.log.Debugf("node: %s, before filtering typeURl %s system version %s, version map: %v",
-			request.GetNode().GetId(), request.GetTypeUrl(), systemVersion, resp.NextVersionMap)
+		cache.log.Debugf("resp: %p sysVersion %s node: %s, sending delta response for typeURL %s with resources: %v removed resources: %v with wildcard: %t",
+			resp, systemVersion, request.GetNode().GetId(), request.GetTypeUrl(), GetResourceNames(resp.Resources), resp.RemovedResources, state.IsWildcard())
+
+		if strings.Contains(resp.GetDeltaRequest().TypeUrl, "ClusterLoadAssignment") ||
+			strings.Contains(resp.GetDeltaRequest().TypeUrl, "Secret") {
+			cache.log.Debugf("resp: %p full resources %s",
+				resp, resp.Resources)
+			cache.log.Debugf("resp: %p version map %s", resp, resp.NextVersionMap)
+		}
 	}
 
 	// Only send a response if there were changes
 	// We want to respond immediately for the first wildcard request in a stream, even if the response is empty
 	// otherwise, envoy won't complete initialization
 	if len(resp.Resources) > 0 || len(resp.RemovedResources) > 0 || (state.IsWildcard() && state.IsFirst()) {
-		if cache.log != nil {
-			cache.log.Debugf("node: %s, sending delta response for typeURL %s with resources: %v removed resources: %v with wildcard: %t",
-				request.GetNode().GetId(), request.GetTypeUrl(), GetResourceNames(resp.Resources), resp.RemovedResources, state.IsWildcard())
-		}
 		select {
 		case value <- resp:
 			return resp, nil
 		case <-ctx.Done():
 			return resp, context.Canceled
 		}
+	}
+	if cache.log != nil {
+		cache.log.Debugf("not sent resp: %p", resp)
 	}
 
 	return nil, nil
