@@ -580,11 +580,16 @@ func (cache *snapshotCache) CreateDeltaWatch(request *DeltaRequest, state stream
 
 // Respond to a delta watch with the provided snapshot value. If the response is nil, there has been no state change.
 func (cache *snapshotCache) respondDelta(ctx context.Context, snapshot ResourceSnapshot, request *DeltaRequest, value chan DeltaResponse, state stream.StreamState) (*RawDeltaResponse, error) {
+	systemVersion := snapshot.GetVersion(request.GetTypeUrl())
 	resp := createDeltaResponse(ctx, request, state, resourceContainer{
 		resourceMap:   snapshot.GetResources(request.GetTypeUrl()),
 		versionMap:    snapshot.GetVersionMap(request.GetTypeUrl()),
 		systemVersion: snapshot.GetVersion(request.GetTypeUrl()),
 	})
+	if cache.log != nil {
+		cache.log.Debugf("node: %s, before filtering typeURl %s system version %s, version map: %v",
+			request.GetNode().GetId(), request.GetTypeUrl(), systemVersion, resp.NextVersionMap)
+	}
 
 	// Only send a response if there were changes
 	// We want to respond immediately for the first wildcard request in a stream, even if the response is empty
@@ -601,6 +606,7 @@ func (cache *snapshotCache) respondDelta(ctx context.Context, snapshot ResourceS
 			return resp, context.Canceled
 		}
 	}
+
 	return nil, nil
 }
 
@@ -613,6 +619,7 @@ func (cache *snapshotCache) cancelDeltaWatch(nodeID string, watchID int64) func(
 	return func() {
 		cache.mu.RLock()
 		defer cache.mu.RUnlock()
+		cache.log.Debugf("cancel delta watch ID:%d for nodeID: %q", watchID, nodeID)
 		if info, ok := cache.status[nodeID]; ok {
 			info.mu.Lock()
 			delete(info.deltaWatches, watchID)

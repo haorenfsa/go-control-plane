@@ -2,8 +2,11 @@ package delta
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"log"
 	"strconv"
+	"strings"
 	"sync/atomic"
 
 	"google.golang.org/grpc/codes"
@@ -92,6 +95,11 @@ func (s *server) processDelta(str stream.DeltaStream, reqCh <-chan *discovery.De
 		response, err := resp.GetDeltaDiscoveryResponse()
 		if err != nil {
 			return "", err
+		}
+
+		if strings.Contains(resp.GetDeltaRequest().TypeUrl, "ClusterLoadAssignment") {
+			jsonBytes, _ := json.Marshal(response)
+			log.Printf("zdebug resp sent %s", string(jsonBytes))
 		}
 
 		streamNonce++
