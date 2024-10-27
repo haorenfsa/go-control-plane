@@ -3,6 +3,7 @@ package delta
 import (
 	"context"
 	"errors"
+	"log"
 	"strconv"
 	"sync/atomic"
 
@@ -88,7 +89,6 @@ func (s *server) processDelta(str stream.DeltaStream, reqCh <-chan *discovery.De
 		if resp == nil {
 			return "", errors.New("missing response")
 		}
-
 		response, err := resp.GetDeltaDiscoveryResponse()
 		if err != nil {
 			return "", err
@@ -99,6 +99,7 @@ func (s *server) processDelta(str stream.DeltaStream, reqCh <-chan *discovery.De
 		if s.callbacks != nil {
 			s.callbacks.OnStreamDeltaResponse(streamID, resp.GetDeltaRequest(), response)
 		}
+		log.Printf("send resp: %p d3\n", resp)
 
 		return response.GetNonce(), str.Send(response)
 	}
@@ -109,14 +110,17 @@ func (s *server) processDelta(str stream.DeltaStream, reqCh <-chan *discovery.De
 		if resp == deltaErrorResponse {
 			return status.Errorf(codes.Unavailable, typ+" watch failed")
 		}
-
+		log.Printf("send resp just before sent: %p\n", resp)
 		nonce, err := send(resp)
 		if err != nil {
+			log.Printf("send resp error: %s\n", err)
 			return err
 		}
 
 		watch := watches.deltaWatches[typ]
 		watch.nonce = nonce
+
+		log.Printf("send resp ok: %p type %s nonce %s, set nexVersions: %v\n", resp, typ, nonce, resp.GetNextVersionMap())
 
 		watch.state.SetResourceVersions(resp.GetNextVersionMap())
 		watches.deltaWatches[typ] = watch
