@@ -3,7 +3,9 @@ package delta
 import (
 	"context"
 	"errors"
+	"log"
 	"strconv"
+	"strings"
 	"sync/atomic"
 
 	"google.golang.org/grpc/codes"
@@ -117,6 +119,11 @@ func (s *server) processDelta(str stream.DeltaStream, reqCh <-chan *discovery.De
 
 		watch := watches.deltaWatches[typ]
 		watch.nonce = nonce
+
+		if strings.Contains(typ, "ClusterLoadAssignment") ||
+			strings.Contains(typ, "Secret") {
+			log.Printf("sent: type %s nonce %s, set nexVersions: %v\n", typ, nonce, resp.GetNextVersionMap())
+		}
 
 		watch.state.SetResourceVersions(resp.GetNextVersionMap())
 		watches.deltaWatches[typ] = watch
