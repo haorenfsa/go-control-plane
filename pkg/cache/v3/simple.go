@@ -594,9 +594,12 @@ func (cache *snapshotCache) respondDelta(ctx context.Context, snapshot ResourceS
 
 		if strings.Contains(resp.GetDeltaRequest().TypeUrl, "ClusterLoadAssignment") ||
 			strings.Contains(resp.GetDeltaRequest().TypeUrl, "Secret") {
-			cache.log.Debugf("resp: %p full resources %s",
-				resp, resp.Resources)
-			cache.log.Debugf("resp: %p version map %s", resp, resp.NextVersionMap)
+			cache.log.Debugf("resp: %p sub %s", resp, state.GetSubscribedResourceNames())
+			cache.log.Debugf("resp: %p full resources %s, removed resources %v",
+				resp, resp.Resources, resp.RemovedResources)
+			cache.log.Debugf("resp: %p preVersions %s",
+				resp, state.GetResourceVersions())
+			cache.log.Debugf("resp: %p nexVersions %s", resp, resp.NextVersionMap)
 		}
 	}
 
@@ -606,13 +609,17 @@ func (cache *snapshotCache) respondDelta(ctx context.Context, snapshot ResourceS
 	if len(resp.Resources) > 0 || len(resp.RemovedResources) > 0 || (state.IsWildcard() && state.IsFirst()) {
 		select {
 		case value <- resp:
+			if cache.log != nil {
+				cache.log.Debugf("send resp ok: %p", resp)
+			}
 			return resp, nil
 		case <-ctx.Done():
+			cache.log.Debugf("send resp ctx canceled: %p", resp)
 			return resp, context.Canceled
 		}
 	}
 	if cache.log != nil {
-		cache.log.Debugf("not sent resp: %p", resp)
+		cache.log.Debugf("send resp skip: %p", resp)
 	}
 
 	return nil, nil
