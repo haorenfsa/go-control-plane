@@ -120,6 +120,10 @@ func (s *server) processDelta(str stream.DeltaStream, reqCh <-chan *discovery.De
 		watch := watches.deltaWatches[typ]
 		watch.nonce = nonce
 
+		if typ == resource.EndpointType {
+			watch.state.SetClusterWarming(false)
+		}
+
 		log.Printf("send resp ok: %p type %s nonce %s, set nexVersions: %v\n", resp, typ, nonce, resp.GetNextVersionMap())
 
 		watch.state.SetResourceVersions(resp.GetNextVersionMap())
@@ -180,6 +184,12 @@ func (s *server) processDelta(str stream.DeltaStream, reqCh <-chan *discovery.De
 				return err
 			}
 
+			typeURL := req.GetTypeUrl()
+			watch, hasWatch := watches.deltaWatches[typeURL]
+			if typeURL == resource.ClusterType && req.ResponseNonce != "" {
+				watch.state.SetClusterWarming(true)
+			}
+
 			if s.callbacks != nil {
 				if err := s.callbacks.OnStreamDeltaRequest(streamID, req); err != nil {
 					return err
@@ -203,11 +213,8 @@ func (s *server) processDelta(str stream.DeltaStream, reqCh <-chan *discovery.De
 				req.TypeUrl = defaultTypeURL
 			}
 
-			typeURL := req.GetTypeUrl()
-
 			// cancel existing watch to (re-)request a newer version
-			watch, ok := watches.deltaWatches[typeURL]
-			if !ok {
+			if !hasWatch {
 				// Initialize the state of the stream.
 				// Since there was no previous state, we know we're handling the first request of this type
 				// so we set the initial resource versions if we have any.
