@@ -120,6 +120,15 @@ func (s *server) processDelta(str stream.DeltaStream, reqCh <-chan *discovery.De
 		watch := watches.deltaWatches[typ]
 		watch.nonce = nonce
 
+		if typ == resource.EndpointType {
+			watch.state.SetClusterWarming(false)
+		}
+		if typ == resource.ClusterType {
+			watch = watches.deltaWatches[resource.EndpointType]
+			watch.state.SetClusterWarming(true)
+			watches.deltaWatches[resource.EndpointType] = watch
+		}
+
 		log.Printf("send resp ok: %p type %s nonce %s, set nexVersions: %v\n", resp, typ, nonce, resp.GetNextVersionMap())
 
 		watch.state.SetResourceVersions(resp.GetNextVersionMap())
@@ -204,7 +213,6 @@ func (s *server) processDelta(str stream.DeltaStream, reqCh <-chan *discovery.De
 			}
 
 			typeURL := req.GetTypeUrl()
-
 			// cancel existing watch to (re-)request a newer version
 			watch, ok := watches.deltaWatches[typeURL]
 			if !ok {
