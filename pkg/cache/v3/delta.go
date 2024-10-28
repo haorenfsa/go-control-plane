@@ -18,6 +18,7 @@ import (
 	"context"
 
 	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
+	"github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/server/stream/v3"
 )
 
@@ -67,7 +68,8 @@ func createDeltaResponse(ctx context.Context, req *DeltaRequest, state stream.St
 			prevVersion, found := state.GetResourceVersions()[name]
 			if r, ok := resources.resourceMap[name]; ok {
 				nextVersion := resources.versionMap[name]
-				if prevVersion != nextVersion {
+				if prevVersion != nextVersion ||
+					(state.HasWarmingCluster() && req.TypeUrl == resource.EndpointType) {
 					filtered = append(filtered, r)
 				}
 				nextVersionMap[name] = nextVersion
