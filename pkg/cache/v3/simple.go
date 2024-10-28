@@ -24,6 +24,7 @@ import (
 
 	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	"github.com/envoyproxy/go-control-plane/pkg/log"
+	"github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/server/stream/v3"
 )
 
@@ -603,10 +604,16 @@ func (cache *snapshotCache) respondDelta(ctx context.Context, snapshot ResourceS
 		}
 	}
 
-	// Only send a response if there were changes
-	// We want to respond immediately for the first wildcard request in a stream, even if the response is empty
+	// Only send a response if:
+	// 1. there were changes
+	// 2. the first wildcard request in a stream
+	// 3. it's for EDS and there's a warming cluster
+	// even if the response is empty
 	// otherwise, envoy won't complete initialization
-	if len(resp.Resources) > 0 || len(resp.RemovedResources) > 0 || (state.IsWildcard() && state.IsFirst()) {
+	if len(resp.Resources) > 0 ||
+		len(resp.RemovedResources) > 0 ||
+		(state.IsWildcard() && state.IsFirst()) ||
+		(state.HasWarmingCluster() && request.TypeUrl == resource.EndpointType) {
 		select {
 		case value <- resp:
 			if cache.log != nil {
